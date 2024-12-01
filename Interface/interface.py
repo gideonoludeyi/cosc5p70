@@ -2,16 +2,26 @@ import csv
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from tkhtmlview import HTMLLabel, HTMLText, RenderHTML
+import torch
+import torch.nn.functional as F
 from student_prediction_model import StudentPredictionModel
 
 import pdb
 
+
 class StudentPredictionApplication:
     def __init__(self, root, model):
+        self.last_prediction = None
+        self.fields = None
+        self.input_frame = None
+        self.btn_frame = None
+        self.icon = None
+        self.tos_frame = None
         self.root = root
         self.root.title("Student Success Predictor")
         self.model = model
         self.create_terms_of_service()
+        self.icon = tk.PhotoImage(file="resources/Brock.png").subsample(6, 6)
 
     def create_terms_of_service(self):
         """
@@ -21,10 +31,8 @@ class StudentPredictionApplication:
         self.tos_frame = ttk.Frame(self.root)
         self.tos_frame.pack(expand=True, fill="both")
 
-        self.icon = tk.PhotoImage(file="Brock.png").subsample(6,6)
-
         # Load in the HTML version of TOS
-        label = HTMLText(self.tos_frame, html=RenderHTML('tos_html.html'))
+        label = HTMLText(self.tos_frame, html=RenderHTML('resources/html/tos_html.html'))
         label.pack(expand=True, fill="both", padx=40, pady=40)
 
         # Agree and disagree buttons
@@ -65,11 +73,14 @@ class StudentPredictionApplication:
         # Help Menu
         help_menu = tk.Menu(menu_bar, tearoff=0)
         help_menu.add_command(label="Terms of Service",
-                              command=lambda: self.show_popup_from_file("Terms of Service", "tos_html.html"))
+                              command=lambda: self.show_popup_from_file("Terms of Service", "resources/html/tos_html"
+                                                                                            ".html"))
         help_menu.add_command(label="Privacy Notice",
-                              command=lambda: self.show_popup_from_file("Privacy Notice", "priv_html.html"))
+                              command=lambda: self.show_popup_from_file("Privacy Notice", "resources/html/priv_html"
+                                                                                          ".html"))
         help_menu.add_command(label="About this Software",
-                              command=lambda: self.show_popup_from_file("About this Software", "info_html.html"))
+                              command=lambda: self.show_popup_from_file("About this Software", "resources/html"
+                                                                                               "/info_html.html"))
         menu_bar.add_cascade(label="Help", menu=help_menu)
 
         icon_label = tk.Label(self.root, image=self.icon)
@@ -86,16 +97,22 @@ class StudentPredictionApplication:
         self.btn_frame.pack(pady=10)
 
         # Upload Button
-        upload_button = ttk.Button(self.btn_frame, text="Upload", command=self.upload_csv).pack(side=tk.LEFT, padx=5, pady=10)
+        ttk.Button(self.btn_frame, text="Upload", command=self.upload_csv).pack(side=tk.LEFT, padx=5, pady=10)
 
         # Prediction Button
-        ttk.Button(self.btn_frame, text="Predict", style="Accent.TButton", command=self.predict).pack(side=tk.RIGHT, padx=5, pady=10)
+        ttk.Button(self.btn_frame, text="Predict", style="Accent.TButton", command=self.predict).pack(side=tk.RIGHT,
+                                                                                                      padx=5, pady=10)
+
+        # Batch Predict Button
+        ttk.Button(self.btn_frame, text="Batch Predict", style="Accent.TButton", command=self.batch_predict).pack(
+            side=tk.RIGHT,
+            padx=5, pady=10)
 
         # Input frame for text fields
         self.input_frame = ttk.Frame(self.root, padding=10)
         self.input_frame.pack(pady=10)
 
-        # Input Fields for Student Information (Organized Nicely)
+        # Input Fields for Student Information
         self.fields = []
         field_names = [
             "Marital status", "Application mode", "Application order", "Course", "Daytime/evening attendance",
@@ -114,7 +131,8 @@ class StudentPredictionApplication:
             "Unemployment rate", "Inflation rate", "GDP"
         ]
 
-        columns = 5  # Number of columns for input fields
+        # Draw the input fields sequentially on the frame
+        columns = 5
         for idx, field_name in enumerate(field_names):
             row = idx // columns
             column = idx % columns
@@ -135,7 +153,7 @@ class StudentPredictionApplication:
                                   "safeguarding your data with robust security measures and providing you with rights "
                                   "to access, correct, or delete your information. For more details, please refer to "
                                   "our full Privacy Notice and Terms of Service.",
-                  font=("Arial", 10), foreground="gray", wraplength=1300).pack(side=tk.BOTTOM,pady=5)
+                  font=("Arial", 10), foreground="gray", wraplength=1300).pack(side=tk.BOTTOM, pady=5)
 
     def clear_inputs(self):
         """
@@ -260,6 +278,55 @@ class StudentPredictionApplication:
 
         return input_data
 
+    def batch_predict(self):
+        """
+        Handles batch prediction logic by reading in multiple rows from a CSV file and saving the results.
+        """
+        file_path = filedialog.askopenfilename(defaultextension=".csv",
+                                               filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            try:
+                # Read CSV file with input data
+                with open(file_path, mode='r') as file:
+                    reader = csv.reader(file)
+                    data = list(reader)
+                    headers = data[0]
+                    rows = data[1:]
+
+                    # Prepare results list
+                    results = []
+                    results.append(headers + ["Predicted Outcome", "Confidence Score"])
+
+                    # Loop through each row of data for prediction
+                    for values in rows:
+                        # Ensure all features are properly formatted and converted to floats
+                        input_features = [float(value) if value.strip() else 0.0 for value in values]
+
+                        # Apply L2 normalization
+                        input_features = F.normalize(torch.tensor(input_features, dtype=torch.float32), p=2,
+                                                     dim=0).tolist()
+
+                        # Make a prediction
+                        predicted_label, confidence_score = self.model.predict(input_features)
+
+                        # Append the prediction and confidence to the row
+                        values.append(predicted_label)
+                        values.append(f"{confidence_score * 100:.2f}%")
+
+                        # Append the complete row to results
+                        results.append(values)
+
+                # Save the results to a new CSV file
+                save_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                                                         filetypes=[("CSV files", "*.csv")])
+                if save_path:
+                    with open(save_path, mode='w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerows(results)
+                    messagebox.showinfo("Batch Prediction Successful", "Batch predictions saved successfully!")
+            except Exception as e:
+                messagebox.showerror("Batch Prediction Error", f"An error occurred: {str(e)}")
+
     def predict(self):
         """
         Handles prediction logic.
@@ -283,9 +350,7 @@ class StudentPredictionApplication:
             messagebox.showerror("Input Error", "The number of input features must be 34.")
             return
 
-
         try:
-            # Assuming self.model is your instance of StudentPredictionModel
             predicted_label, confidence_score = self.model.predict(input_features)
             self.last_prediction = predicted_label  # Store prediction for saving
             self.last_confidence = confidence_score  # Store confidence score for saving
@@ -309,11 +374,10 @@ class StudentPredictionApplication:
                                 background="#333333")
         title_label.pack(pady=15)
 
-        # Render the prediction result and confidence score in well-styled labels
+        # Render the prediction result and confidence score
         result_label = ttk.Label(popup, text=f"Predicted Outcome: {prediction}", font=("Arial", 14),
                                  foreground="#FFFFFF", background="#333333")
         result_label.pack(pady=10)
-
         confidence_label = ttk.Label(popup, text=f"Confidence Score: {confidence * 100:.2f}%", font=("Arial", 14),
                                      foreground="#FFFFFF", background="#333333")
         confidence_label.pack(pady=10)
@@ -322,14 +386,15 @@ class StudentPredictionApplication:
         close_button = ttk.Button(popup, text="Close", command=popup.destroy)
         close_button.pack(pady=10)
 
+
 def main():
     # Load model for use in the backend
-    model = StudentPredictionModel("model.pth")
+    model = StudentPredictionModel("resources/model.pth")
 
     # Initialize the tkinter window
     root = tk.Tk()
     root.geometry('1632x918')
-    root.tk.call("source", "Azure-ttk-theme-main/azure.tcl")
+    root.tk.call("source", "resources/Azure-ttk-theme-main/azure.tcl")
     root.tk.call("set_theme", "dark")
     app = StudentPredictionApplication(root, model)
     root.mainloop()

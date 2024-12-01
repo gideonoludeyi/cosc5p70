@@ -47,10 +47,13 @@ class StudentPredictionModel:
         Args:
             input_features (list or numpy array): Feature vector of size 34.
         Returns:
-            tuple: Predicted label ('Dropout', 'Enrolled', or 'Graduate') and confidence score.
+            str: Predicted label ('Dropout', 'Enrolled', or 'Graduate').
         """
         with torch.no_grad():
-            input_tensor = torch.tensor(input_features, dtype=torch.float32).unsqueeze(0)
+            # Convert input to a tensor and normalize using L2 normalization
+            input_tensor = torch.tensor(input_features, dtype=torch.float32)
+            input_tensor = F.normalize(input_tensor, p=2, dim=0).unsqueeze(0)  # Normalize and add batch dimension
+            
             output = self.model(input_tensor)
             probabilities = F.softmax(output, dim=1)  # Calculate probabilities
             
