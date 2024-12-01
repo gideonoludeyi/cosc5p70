@@ -46,12 +46,18 @@ class StudentPredictionModel:
         self.model.load_state_dict(torch.load(model_path))
 
     def _preprocess_input(self, input_features):
+        """
+        Normalize the input features.
+        """
         if self.input_mean is not None and self.input_std is not None:
             return (input_features - self.input_mean) / self.input_std
         else:
             return input_features
 
     def _create_logfile_if_not_exists(self):
+        """
+        Create a csv file to record confidence probabilities for each prediction
+        """
         if self.logfile is None:
             return
         logfile = pathlib.Path(self.logfile)
@@ -64,9 +70,17 @@ class StudentPredictionModel:
                 writer.writerow(inputfields + outputfields)
 
     def _record_confidence(self, input_features, probabilities):
+        """
+        Write the confidence (probabilities) of the model for each label onto a csv file.
+        The probabilities are recorded as `y = log(1 + x_l)` where `x_l` is the model's confidence
+        that the input features `x` correspond to a label `l`.
+
+        Args:
+            input_features (list or numpy array): Feature vector of size 34.
+            probabilities (list or numpy array): Confidence scores for ('Dropout', 'Enrolled', 'Graduated') respectively.
+        """
         if self.logfile is not None:
-            # logprobas = np.log(probabilities)
-            logprobas = probabilities
+            logprobas = np.log1p(probabilities)
             record = np.concatenate([input_features, logprobas[0]])
 
             self._create_logfile_if_not_exists()
