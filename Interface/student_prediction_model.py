@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
-class StudentOutcomeModel:
+class StudentPredictionModel:
     def __init__(self, model_path):
         """
         Initialize the model and load its parameters from the specified path.
@@ -19,7 +20,7 @@ class StudentOutcomeModel:
         Define the model architecture. This should match the training architecture.
         """
         return nn.Sequential(
-            nn.Linear(36, 256),
+            nn.Linear(34, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.3),
@@ -40,33 +41,21 @@ class StudentOutcomeModel:
         """
         self.model.load_state_dict(torch.load(model_path))
 
-    def set_normalization_params(self, mean, std):
-        """
-        Set normalization parameters for inputs.
-        """
-        self.input_mean = np.array(mean)
-        self.input_std = np.array(std)
-
     def predict(self, input_features):
         """
         Make a prediction using the model.
         Args:
-            input_features (list or numpy array): Feature vector of size 36.
+            input_features (list or numpy array): Feature vector of size 34.
         Returns:
-            str: Predicted label ('Dropout', 'Enrolled', or 'Graduate').
+            tuple: Predicted label ('Dropout', 'Enrolled', or 'Graduate') and confidence score.
         """
-        if len(input_features) != 36:
-            raise ValueError("Input features must be of length 36.")
-        
-        # Normalize the input
-        input_array = np.array(input_features, dtype=np.float32)
-        if self.input_mean is not None and self.input_std is not None:
-            input_array = (input_array - self.input_mean) / self.input_std
-
-        # Convert to tensor and make prediction
-        input_tensor = torch.tensor(input_array).unsqueeze(0)  # Add batch dimension
         with torch.no_grad():
+            input_tensor = torch.tensor(input_features, dtype=torch.float32).unsqueeze(0)
             output = self.model(input_tensor)
-            predicted_index = torch.argmax(output, dim=1).item()
-
-        return self.label_map[predicted_index]
+            probabilities = F.softmax(output, dim=1)  # Calculate probabilities
+            
+            predicted_class = torch.argmax(probabilities, dim=1).item()
+            confidence_score = torch.max(probabilities).item()  # Get the highest probability
+            
+            predicted_label = self.label_map[predicted_class]
+            return predicted_label, confidence_score
