@@ -82,6 +82,7 @@ class StudentPredictionApplication:
         help_menu.add_command(label="About this Software",
                               command=lambda: self.show_popup_from_file("About this Software", "resources/html"
                                                                                                "/info_html.html"))
+        help_menu.add_command(label="Provide Feedback", command=self.feedback_window)
         menu_bar.add_cascade(label="Help", menu=help_menu)
 
         icon_label = tk.Label(self.root, image=self.icon)
@@ -386,6 +387,43 @@ class StudentPredictionApplication:
         # Close Button
         close_button = ttk.Button(popup, text="Close", command=popup.destroy)
         close_button.pack(pady=10)
+
+    def feedback_window(self):
+        """
+        Opens a new window to allow users to provide feedback to the developers.
+        """
+        feedback_popup = tk.Toplevel(self.root)
+        feedback_popup.title("Provide Feedback")
+        feedback_popup.geometry("500x400")
+        feedback_popup.configure(bg="#333333")
+
+        # Feedback form title
+        ttk.Label(feedback_popup, text="Please input any feedback you may have about the software!",
+                  font=("Arial", 16, "bold"), foreground="#FFFFFF", background="#333333").pack(pady=15)
+
+        # Feedback text box
+        feedback_text = tk.Text(feedback_popup, wrap=tk.WORD, width=50, height=10, font=("Arial", 12))
+        feedback_text.pack(padx=20, pady=10)
+
+        # Submit feedback button
+        ttk.Button(feedback_popup, text="Submit",
+                   command=lambda: self.submit_feedback(feedback_text, feedback_popup)).pack(pady=10)
+
+    def submit_feedback(self, feedback_text, feedback_popup):
+        """
+        Handles submission of feedback from the user.
+        """
+        feedback = feedback_text.get("1.0", tk.END).strip()
+        if feedback:
+            try:
+                with open("feedback.txt", "a") as f:
+                    f.write(feedback + "\n\n")
+                messagebox.showinfo("Feedback Received", "Thank you for your feedback!")
+                feedback_popup.destroy()
+            except Exception as e:
+                messagebox.showerror("Feedback Error", f"An error occurred while saving your feedback: {str(e)}")
+        else:
+            messagebox.showwarning("Empty Feedback", "Please enter your feedback before submitting.")
 
 
 def main():
