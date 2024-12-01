@@ -6,6 +6,8 @@ from student_prediction_model import StudentPredictionModel
 
 import pdb
 
+import pandas as pd
+
 class StudentPredictionApplication:
     def __init__(self, root, model):
         self.root = root
@@ -324,7 +326,9 @@ class StudentPredictionApplication:
 
 def main():
     # Load model for use in the backend
-    model = StudentPredictionModel("model.pth")
+    input_mean = pd.read_csv('input_mean.csv')['0']
+    input_std = pd.read_csv('input_std.csv')['0']
+    model = StudentPredictionModel("model.pth", input_mean=input_mean, input_std=input_std, logfile="confidence.csv")
 
     # Initialize the tkinter window
     root = tk.Tk()
